@@ -20,39 +20,44 @@ class BookRecord extends StatelessWidget {
 
 class BottomNavigation extends StatefulWidget {
   @override
-  _BottomNavigationState createState() => _BottomNavigationState();
+  BottomNavigationState createState() => BottomNavigationState();
 }
 
-class _BottomNavigationState extends State<BottomNavigation> {
-  int _currentIndex = 0;
-  List _selectedItems = [];
+class BottomNavigationState extends State<BottomNavigation> {
+  int pageIndex = 0;
+  List selectedItemsList = [];
 
   void setSelectedItems(List items) {
     setState(() {
-      _selectedItems = items;
+      selectedItemsList = items;
     });
   }
 
-  final List<Widget> Function(List, Function) _screens = (items, setSelectedItems) => [
+  final List<Widget> Function(List, Function) screensList = (items, setSelectedItems) => [
     LibraryScreen(selectedItems: items, setSelectedItems: setSelectedItems),
+    StatisticsScreen(selectedItems: items),
     SettingsScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens(_selectedItems, setSelectedItems)[_currentIndex],
+      body: screensList(selectedItemsList, setSelectedItems)[pageIndex],
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
+        currentIndex: pageIndex,
         onTap: (index) {
           setState(() {
-            _currentIndex = index;
+            pageIndex = index;
           });
         },
         items: [
           BottomNavigationBarItem(
             icon: Icon(Icons.menu_book),
             label: '서재',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: '통계',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
@@ -71,22 +76,22 @@ class SearchScreen extends StatefulWidget {
   SearchScreen({required this.selectedItems, required this.setSelectedItems});
 
   @override
-  _SearchScreenState createState() => _SearchScreenState();
+  SearchScreenState createState() => SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class SearchScreenState extends State<SearchScreen> {
   String result = '';
   List<dynamic> data = [];
-  TextEditingController _editingController = TextEditingController();
-  ScrollController _scrollController = ScrollController();
+  TextEditingController editingController = TextEditingController();
+  ScrollController scrollController = ScrollController();
   int page = 1;
 
   @override
   void initState() {
     super.initState();
-    _editingController.addListener(() {
-      if (_scrollController.offset >= _scrollController.position.maxScrollExtent &&
-          !_scrollController.position.outOfRange) {
+    editingController.addListener(() {
+      if (scrollController.offset >= scrollController.position.maxScrollExtent &&
+          !scrollController.position.outOfRange) {
         page++;
         getJSONData();
       }
@@ -95,8 +100,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
-    _editingController.dispose();
-    _scrollController.dispose();
+    editingController.dispose();
+    scrollController.dispose();
     super.dispose();
   }
 
@@ -105,7 +110,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       appBar: AppBar(
         title: TextField(
-          controller: _editingController,
+          controller: editingController,
           style: TextStyle(color: Colors.white),
           keyboardType: TextInputType.text,
           decoration: InputDecoration(
@@ -162,8 +167,6 @@ class _SearchScreenState extends State<SearchScreen> {
                               child: Text(data[index]['title'].toString()),
                             ),
                             Text(data[index]['authors'].toString()),
-                            Text(data[index]['sale_price'].toString()),
-                            Text(data[index]['status'].toString()),
                           ],
                         ),
                         Icon(
@@ -179,7 +182,7 @@ class _SearchScreenState extends State<SearchScreen> {
               );
             },
             itemCount: data.length,
-            controller: _scrollController,
+            controller: scrollController,
           ),
         ),
       ),
@@ -197,7 +200,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<String> getJSONData() async {
     var url = Uri.parse(
-        'https://dapi.kakao.com/v3/search/book?target=title&page=$page&query=${_editingController.text}');
+        'https://dapi.kakao.com/v3/search/book?target=title&page=$page&query=${editingController.text}');
     var response = await http.get(url, headers: {
       "Authorization": "KakaoAK fb6430965fa9c29ded41df00c37a3bfa",
     });
@@ -238,7 +241,14 @@ class LibraryScreen extends StatelessWidget {
                 var updatedBook = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => DetailScreen(book: selectedItems[index]),
+                    builder: (context) => DetailScreen(
+                      book: selectedItems[index],
+                      onBookStatusChanged: (status) {
+                        selectedItems[index]['statusIndex'] = status;
+                        setSelectedItems(selectedItems);
+                      },
+                      statusIndex: selectedItems[index]['statusIndex'],
+                    ),
                   ),
                 );
                 if (updatedBook != null) {
@@ -264,24 +274,38 @@ class LibraryScreen extends StatelessWidget {
     );
   }
 }
-
-
 class DetailScreen extends StatefulWidget {
   final dynamic book;
+  final Function(dynamic) onBookStatusChanged;
+  final int statusIndex;
 
-  DetailScreen({required this.book});
+  DetailScreen({required this.book, required this.onBookStatusChanged, int? statusIndex})
+      : statusIndex = statusIndex ?? 0;
 
   @override
-  _DetailScreenState createState() => _DetailScreenState();
+  DetailScreenState createState() => DetailScreenState(statusIndex: statusIndex);
 }
 
-class _DetailScreenState extends State<DetailScreen> {
-  TextEditingController _memoController = TextEditingController();
-  FocusNode _memoFocusNode = FocusNode();
+class DetailScreenState extends State<DetailScreen> {
+  TextEditingController memoController = TextEditingController();
+  FocusNode memoFocusNode = FocusNode();
+  int pageNumber = 0;
+  List<String> readingStatus = ['독서중', '읽은책', '읽을책'];
+  late int statusIndex;
+
+  DetailScreenState({required this.statusIndex});
+
+  @override
+  void initState() {
+    super.initState();
+    statusIndex = widget.statusIndex ?? 0;
+    pageNumber= widget.book['currentPage'] ?? 0;
+  }
 
   @override
   void dispose() {
-    _memoFocusNode.dispose();
+    memoController.dispose();
+    memoFocusNode.dispose();
     super.dispose();
   }
 
@@ -310,9 +334,93 @@ class _DetailScreenState extends State<DetailScreen> {
               style: TextStyle(fontSize: 16.0),
             ),
             SizedBox(height: 8.0),
+            Text(
+              widget.book['contents'],
+              style: TextStyle(fontSize: 14.0),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  statusIndex = (statusIndex + 1) % readingStatus.length;
+                });
+                widget.onBookStatusChanged(statusIndex);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: statusIndex == 0 ? Colors.red : (statusIndex == 1 ? Colors.green : Colors.blue),
+              ),
+              child: Text('독서 상태: ' + readingStatus[statusIndex]),
+            ),
+            SizedBox(height: 8.0),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '현재 읽고 있는 페이지: ',
+                      style: TextStyle(fontSize: 16.0),
+                    ),
+                    Text(
+                      '$pageNumber 페이지',
+                      style: TextStyle(fontSize: 16.0),
+                    ),
+                  ],
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text('페이지 변경'),
+                          content: TextFormField(
+                            initialValue: pageNumber.toString(),
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(fontSize: 16.0),
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(),
+                              labelText: '페이지',
+                            ),
+                            validator: (value) {
+                              if (value?.isEmpty ?? true)  {
+                                return '페이지를 입력하세요.';
+                              }
+                              return null;
+                            },
+                            onChanged: (value) {
+                              setState(() {
+                                pageNumber = int.tryParse(value) ?? 0;
+                                widget.book['currentPage'] = pageNumber;
+                              });
+                            },
+                          ),
+                          actions: <Widget>[
+                            TextButton(
+                              child: Text('취소'),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                            TextButton(
+                              child: Text('확인'),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                  child: Text('독서기록 변경'),
+                ),
+              ],
+            ),
+            SizedBox(height: 8.0),
             TextField(
-              controller: _memoController,
-              focusNode: _memoFocusNode,
+              controller: memoController,
+              focusNode: memoFocusNode,
               decoration: InputDecoration(
                 border: OutlineInputBorder(),
                 labelText: '문구',
@@ -322,12 +430,12 @@ class _DetailScreenState extends State<DetailScreen> {
             SizedBox(height: 8.0),
             ElevatedButton(
               onPressed: () {
-                if (_memoController.text.isNotEmpty) {
+                if (memoController.text.isNotEmpty) {
                   setState(() {
-                    widget.book['memo'] = _memoController.text;
+                    widget.book['memo'] = memoController.text;
                   });
                 }
-                _memoFocusNode.unfocus();
+                memoFocusNode.unfocus();
               },
               child: Text('문구 남기기'),
             ),
@@ -343,6 +451,74 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 }
 
+class StatisticsScreen extends StatefulWidget {
+  final List selectedItems;
+
+  StatisticsScreen({required this.selectedItems});
+
+  @override
+  StatisticsScreenState createState() => StatisticsScreenState();
+}
+
+class StatisticsScreenState extends State<StatisticsScreen> {
+  int TabIndex = 0;
+  final List<String> readingStatus = ['읽을책', '읽은책'];
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('통계'),
+          bottom: TabBar(
+            tabs: [
+              Tab(text: readingStatus[0]),
+              Tab(text: readingStatus[1]),
+            ],
+            onTap: (index) {
+              setState(() {
+                TabIndex = index;
+              });
+            },
+          ),
+        ),
+        body: TabIndex == 0
+            ? BookList(
+          selectedItems: widget.selectedItems.where((book) => book['statusIndex'] == 2).toList(),
+        )
+            : BookList(
+          selectedItems: widget.selectedItems.where((book) => book['statusIndex'] == 1).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class BookList extends StatelessWidget {
+  final List selectedItems;
+
+  BookList({required this.selectedItems});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: selectedItems.length,
+      itemBuilder: (BuildContext context, int index) {
+        return Card(
+          child: ListTile(
+            leading: selectedItems[index]['thumbnail'] != null &&
+                selectedItems[index]['thumbnail'].isNotEmpty
+                ? Image.network(selectedItems[index]['thumbnail'])
+                : null,
+            title: Text(selectedItems[index]['title']),
+            subtitle: Text(selectedItems[index]['authors'].join(', ')),
+          ),
+        );
+      },
+    );
+  }
+}
 
 class SettingsScreen extends StatelessWidget {
   @override
@@ -351,8 +527,67 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('설정'),
       ),
-      body: Center(
-        child: Text('미구현'),
+      body: ListView(
+        children: [
+          Card(
+            elevation: 2.0,
+            child: ListTile(
+              title: Text('내정보'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MyInfoScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MyInfoScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('내정보'),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              '이름',
+              style: TextStyle(fontSize: 18.0),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              '송태호',
+              style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              '한마디',
+              style: TextStyle(fontSize: 18.0),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              '능력부족..',
+              style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "948785000974",
+    "project_id": "bookrecord-65ef6",
+    "storage_bucket": "bookrecord-65ef6.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:948785000974:android:38a987052eecc553a1c25f",
+        "android_client_info": {
+          "package_name": "com.example.bokkr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAcSj2qVlhciJjstlJHzUli60g-joLWCO4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
